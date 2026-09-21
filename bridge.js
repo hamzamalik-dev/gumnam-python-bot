@@ -1,26 +1,53 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
-const { execSync } = require('child_process');
+const http = require('http');
 
+// Apna asal personal number yahan likhein (country code ke sath, bina '+' ke)
 const OWNER_JID = '923039354643@s.whatsapp.net';
 
-async function startBot() {
+// Agar aapko Pairing Code use karna ho toh ise true kar dein, warna QR code ke liye false rakhein
+const USE_PAIRING_CODE = false; 
+const BOT_PHONE_NUMBER = '923144816962'; // Agar pairing code use karein toh yahan bot ka number dein
+
+async function startGumnamBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
-        browser: ["Windows", "Chrome", "10.0"]
+        printQRInTerminal: true, // Logs mein saaf QR code dikhane ke liye
+        browser: Browsers.macOS('Desktop'), // Stable browser profile
     });
+
+    // Agar aap pairing code use karna chahein toh yeh block uncomment kar sakte hain
+    if (USE_PAIRING_CODE && !sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
+                console.log(`\n========================================`);
+                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
+                console.log(`========================================\n`);
+            } catch (err) {
+                console.log('Pairing code generate karne mein error aaya:', err);
+            }
+        }, 3000);
+    }
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if (qr) qrcode.generate(qr, { small: true });
+        
+        if (qr && !USE_PAIRING_CODE) {
+            console.log('--- NAYA QR CODE GENERATE HUWA HAI ---');
+            qrcode.generate(qr, { small: true });
+        }
+
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            if (shouldReconnect) { startBot(); }
+            console.log('Connection band ho gaya hai. Dobara connect karne ki koshish ki ja rahi hai...', shouldReconnect);
+            if (shouldReconnect) {
+                startGumnamBot();
+            }
         } else if (connection === 'open') {
-            console.log('Gumnam Agent WhatsApp Bridge live ho gaya hai!');
+            console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
         }
     });
 
@@ -53,7 +80,7 @@ async function startBot() {
         const isOwner = (participant === OWNER_JID || senderJid === OWNER_JID);
         const lowerText = messageText.toLowerCase();
 
-        // Security filters for non-owners
+        // 1. SECURITY FILTER: Bad Words Detection (Non-owners only)
         const badWords = ["fuck", "shit", "bitch", "asshole", "bastard", "idiot", "haram", "choot", "lund", "gandu", "madarchod", "behenchod", "bhosdike"];
         const containsAbuse = badWords.some(word => lowerText.includes(word));
 
@@ -66,6 +93,7 @@ async function startBot() {
             return;
         }
 
+        // 2. SECURITY FILTER: Link Blocking (Non-owners only)
         const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9][-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
         if (linkRegex.test(messageText) && !isOwner) {
             try { await sock.sendMessage(senderJid, { delete: m.key }); } catch (e) {}
@@ -76,7 +104,7 @@ async function startBot() {
             return;
         }
 
-        // --- SPECIAL OWNER LOGIC (VIP Style & Direct Commands) ---
+        // --- 3. OWNER VIP COMMANDS LOGIC ---
         if (isOwner) {
             let ownerReply = "";
             if (lowerText.startsWith('/song') || lowerText.startsWith('/gana')) {
@@ -84,7 +112,7 @@ async function startBot() {
             } else if (lowerText.startsWith('/rules')) {
                 ownerReply = "📜 *[Group Rules - Boss Mode]*\n1. Girls ki izzat aur respect sab se pehle hai.\n2. Koi abuse ya badtameezi nahi chalegi.\n3. Koi external links share nahi honge.";
             } else if (lowerText.startsWith('/help')) {
-                ownerReply = "🛠️ *[Owner Commands]*\n- /song : Special beat\n- /rules : Group rules check karein\n- /status : Bot surveillance check";
+                ownerReply = "🛠️ *[Owner Control Panel]*\n- /song : Special beat\n- /rules : Group rules check karein\n- /status : Bot surveillance check";
             } else if (lowerText.startsWith('/status')) {
                 ownerReply = "🛡️ *Gumnam Agent Status:* All security filters active, groups under surveillance, Boss!";
             } else if (messageText.startsWith('/')) {
@@ -97,7 +125,7 @@ async function startBot() {
             return;
         }
 
-        // --- NORMAL MEMBERS LOGIC (Requires '/' prefix or 'gumnam' mention) ---
+        // --- 4. NORMAL MEMBERS COMMANDS LOGIC ---
         const isPrefixed = messageText.startsWith('/');
         const isMentioned = lowerText.includes('gumnam');
 
@@ -125,13 +153,13 @@ async function startBot() {
     });
 }
 
-startBot();
+startGumnamBot();
 
-const http = require('http');
-const port = process.env.PORT || 3000;
+// Render web service ke liye dummy HTTP server
+const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('WhatsApp Bot is running successfully!\n');
-}).listen(port, () => {
-  console.log(`Dummy web server running on port ${port}`);
+  res.end('Gumnam Agent WhatsApp Bot is active and running successfully!\n');
+}).listen(PORT, () => {
+  console.log(`HTTP server running on port ${PORT}`);
 });
