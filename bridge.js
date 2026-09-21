@@ -4,14 +4,14 @@ const { execSync } = require('child_process');
 const OWNER_JID = '923039354643@s.whatsapp.net';
 
 // ⚠️ YAHAN APNE BOT KA WHATSAPP NUMBER LIKHEIN (Country code ke sath, bina + ke)
-const BOT_NUMBER = "923394044643"; 
+const BOT_NUMBER = "923144816962"; 
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // QR code band kar diya
+        printQRInTerminal: True, // QR code band kar diya
         browser: ["Ubuntu", "Chrome", "20.0.04"] // Browser update for pairing code
     });
 
