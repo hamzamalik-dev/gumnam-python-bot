@@ -1,21 +1,36 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const { execSync } = require('child_process');
 
 const OWNER_JID = '923039354643@s.whatsapp.net';
+
+// ⚠️ YAHAN APNE BOT KA WHATSAPP NUMBER LIKHEIN (Country code ke sath, bina + ke)
+const BOT_NUMBER = "923394044643"; 
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
-        browser: ["Windows", "Chrome", "10.0"]
+        printQRInTerminal: false, // QR code band kar diya
+        browser: ["Ubuntu", "Chrome", "20.0.04"] // Browser update for pairing code
     });
 
+    // Pairing code generate karna
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(BOT_NUMBER);
+                console.log(`\n======================================================`);
+                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
+                console.log(`======================================================\n`);
+            } catch (err) {
+                console.log('Pairing code generate karne mein error:', err);
+            }
+        }, 3000); // 3 seconds intezar taake server connect ho jaye
+    }
+
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) qrcode.generate(qr, { small: true });
+        const { connection, lastDisconnect } = update;
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
             if (shouldReconnect) { startBot(); }
@@ -51,8 +66,6 @@ async function startBot() {
 
         if (!messageText) return;
 
-        // Python core engine ko message pass karke response lena
-        // Yahan hum simple rule execution ya direct handling kar rahe hain taake fast response mile
         const isOwner = (participant === OWNER_JID || senderJid === OWNER_JID);
         const lowerText = messageText.toLowerCase();
 
