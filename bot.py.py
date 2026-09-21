@@ -99,3 +99,16 @@ def process_message(sender_jid, participant, is_group, is_announcement, message_
 
 if __name__ == "__main__":
     print("Gumnam Agent Python Core Engine initialized successfully (Zero Traffic Mode Active).")
+
+    import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class DummyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running successfully!")
+
+port = int(os.environ.get("PORT", 8000))
+print(f"Keeping bot alive on port {port}...")
+HTTPServer(('0.0.0.0', port), DummyServer).serve_forever()
