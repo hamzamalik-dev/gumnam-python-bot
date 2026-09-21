@@ -110,3 +110,12 @@ async function startBot() {
 }
 
 startBot();
+
+const http = require('http');
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('WhatsApp Bot is running successfully!\n');
+}).listen(port, () => {
+  console.log(`Dummy web server running on port ${port}`);
+});
