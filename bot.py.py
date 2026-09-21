@@ -7,10 +7,10 @@ user_warnings = {}
 
 # Bad words aur abusive language ki local list (Zero online dependency)
 BAD_WORDS = [
-    "fuck", "shit", "bitch", "asshole", "bastard", "idiot", 
-    "haram", "choot", "lund", "gandu", "madarchod", "behenchod", "bhosdike"
+    "fuck", "shit", "bitch", "asshole", "bastard", "idiot", "Kutty", "kuty", "daly",
+    "haram", "choot", "lund", "gandu", "madarchod", "behenchod", "bhosdike", "Dog", "cunt", "slut", "whore", "dick", "pussy", "nigger", "faggot", "retard",
+    "bhen ki lund", "madar chod", "lund ka bacha", "chodung", "chodu", "gand ka bacha", "gandu ka bacha"
 ]
-
 def process_message(sender_jid, participant, is_group, is_announcement, message_text):
     """
     Gumnam Agent Local Core Logic Engine
