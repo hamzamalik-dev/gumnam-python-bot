@@ -1,0 +1,112 @@
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const { execSync } = require('child_process');
+
+const OWNER_JID = '923039354643@s.whatsapp.net';
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        browser: ["Windows", "Chrome", "10.0"]
+    });
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) qrcode.generate(qr, { small: true });
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
+            if (shouldReconnect) { startBot(); }
+        } else if (connection === 'open') {
+            console.log('Gumnam Agent WhatsApp Bridge live ho gaya hai!');
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const m = messages[0];
+        if (!m.message || m.key.fromMe) return;
+
+        const senderJid = m.key.remoteJid;
+        const participant = m.key.participant || senderJid;
+        const isGroup = senderJid.endsWith('@g.us');
+        const isAnnouncement = senderJid.includes('@g.us') || senderJid.includes('newsletter');
+
+        // Personal chats ko ignore karega
+        if (!isGroup && !isAnnouncement) return;
+
+        const messageType = Object.keys(m.message)[0];
+        let messageText = '';
+
+        if (messageType === 'conversation') {
+            messageText = m.message.conversation;
+        } else if (messageType === 'extendedTextMessage') {
+            messageText = m.message.extendedTextMessage.text;
+        } else if (messageType === 'imageMessage' && m.message.imageMessage.caption) {
+            messageText = m.message.imageMessage.caption;
+        }
+
+        if (!messageText) return;
+
+        // Python core engine ko message pass karke response lena
+        // Yahan hum simple rule execution ya direct handling kar rahe hain taake fast response mile
+        const isOwner = (participant === OWNER_JID || senderJid === OWNER_JID);
+        const lowerText = messageText.toLowerCase();
+
+        // Security filters & responses
+        const badWords = ["fuck", "shit", "bitch", "asshole", "bastard", "idiot", "haram", "choot", "lund", "gandu", "madarchod", "behenchod", "bhosdike"];
+        const containsAbuse = badWords.some(word => lowerText.includes(word));
+
+        if (containsAbuse && !isOwner) {
+            try { await sock.sendMessage(senderJid, { delete: m.key }); } catch (e) {}
+            await sock.sendMessage(senderJid, { 
+                text: `⚠️ *Respect Warning!*\n@${participant.split('@')[0]}, is platform par badtameezi ya abuse bilkul bardasht nahi ki jayegi. Girls ki respect aur decency sab se pehle hai!`,
+                mentions: [participant]
+            });
+            return;
+        }
+
+        const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9][-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
+        if (linkRegex.test(messageText) && !isOwner) {
+            try { await sock.sendMessage(senderJid, { delete: m.key }); } catch (e) {}
+            await sock.sendMessage(senderJid, { 
+                text: `⚠️ *Link Warning & Deleted!*\n@${participant.split('@')[0]}, is group/community mein links share karna sakht mana hai.`,
+                mentions: [participant]
+            });
+            return;
+        }
+
+        // Mention check
+        const isMentioned = lowerText.includes('gumnam');
+        if (!isMentioned && !isOwner) return;
+
+        let replyText = "";
+        if (isOwner) {
+            if (lowerText.includes('song') || lowerText.includes('gana')) {
+                replyText = "🎵 Yeh lijiye Gumnam Owner ke liye special beat:\n\n*Dil ye mera maane na, roke tujhe jaane na...*\n🎶 (Gumnam Agent hazir hai!)";
+            } else {
+                replyText = `Ji Gumnam Owner! Aapka message mil gaya hai: "${messageText}"`;
+            }
+        } else {
+            if (lowerText.includes('song') || lowerText.includes('gana')) {
+                replyText = `🎵 @${participant.split('@')[0]}, yeh lijiye aapke liye song:\n\n*Ranjhna ve, ashi teri yaad vich...*\n🎶 (Gumnam Agent entertainment mode!)`;
+            } else if (lowerText.includes('hello') || lowerText.includes('salam')) {
+                replyText = `Waikum Assalam @${participant.split('@')[0]}! Main Gumnam Agent hoon, is platform ka security bot. Yahan girls ki respect aur discipline lazmi hai.`;
+            } else {
+                replyText = `Ji @${participant.split('@')[0]}, main Gumnam Agent hoon. Yahan discipline aur sab ki izzat sab se pehle hai!`;
+            }
+        }
+
+        if (replyText) {
+            await sock.sendMessage(senderJid, { 
+                text: replyText,
+                mentions: isOwner ? [] : [participant] 
+            }, { quoted: m });
+        }
+    });
+}
+
+startBot();
