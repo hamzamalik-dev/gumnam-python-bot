@@ -11,7 +11,7 @@ async function startBot() {
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: True, // QR code band kar diya
+        printQRInTerminal: true, // QR code band kar diya
         browser: ["Ubuntu", "Chrome", "20.0.04"] // Browser update for pairing code
     });
 
