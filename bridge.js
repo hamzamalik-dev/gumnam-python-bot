@@ -28,27 +28,28 @@ async function startGumnamBot() {
             console.log(`Connection close ho gaya! Status: ${statusCode}, Reconnecting: ${shouldReconnect}`);
             
             if (shouldReconnect) {
+                pairingRequested = false;
                 setTimeout(() => startGumnamBot(), 5000);
             }
         }
+
+        // Safe Pairing Code Trigger
+        if (!sock.authState.creds.registered && !pairingRequested) {
+            pairingRequested = true;
+            setTimeout(async () => {
+                try {
+                    console.log('Pairing code mangwaya ja raha hai...');
+                    const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
+                    console.log(`\n========================================`);
+                    console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
+                    console.log(`========================================\n`);
+                } catch (err) {
+                    console.log('Pairing code error:', err);
+                    pairingRequested = false;
+                }
+            }, 6000);
+        }
     });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    // FIX: Socket start hone ke baad thora wait karke direct pairing code mangwayein
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                console.log('Pairing code mangwaya ja raha hai...');
-                const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
-                console.log(`\n========================================`);
-                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
-                console.log(`========================================\n`);
-            } catch (err) {
-                console.log('Pairing code error:', err);
-            }
-        }, 10000); // Delay barha kar 10 seconds kar diya hai taake connection drop na ho
-    }
 
     sock.ev.on('creds.update', saveCreds);
 
