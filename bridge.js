@@ -1,25 +1,23 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const http = require('http');
+const fs = require('fs');
 
-// Apna asal personal number yahan likhein (country code ke sath, bina '+' ke)
 const OWNER_JID = '923039354643@s.whatsapp.net';
 
-// Agar aapko Pairing Code use karna ho toh ise true kar dein, warna QR code ke liye false rakhein
-const USE_PAIRING_CODE = false; 
-const BOT_PHONE_NUMBER = '923144816962'; // Agar pairing code use karein toh yahan bot ka number dein
+// Yahan apna woh number likhein jispar bot chalana hai (Country code ke sath, bina '+' ke)
+const BOT_PHONE_NUMBER = '923144816962'; // <-- Yahan apna bot wala number likhein
 
 async function startGumnamBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true, // Logs mein saaf QR code dikhane ke liye
-        browser: Browsers.macOS('Desktop'), // Stable browser profile
+        printQRInTerminal: false, // QR code bilkul band
+        browser: Browsers.macOS('Desktop'),
     });
 
-    // Agar aap pairing code use karna chahein toh yeh block uncomment kar sakte hain
-    if (USE_PAIRING_CODE && !sock.authState.creds.registered) {
+    // Pairing code request logic
+    if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
                 const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
@@ -29,22 +27,19 @@ async function startGumnamBot() {
             } catch (err) {
                 console.log('Pairing code generate karne mein error aaya:', err);
             }
-        }, 3000);
+        }, 4000);
     }
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect } = update;
         
-        if (qr && !USE_PAIRING_CODE) {
-            console.log('--- NAYA QR CODE GENERATE HUWA HAI ---');
-            qrcode.generate(qr, { small: true });
-        }
-
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log('Connection band ho gaya hai. Dobara connect karne ki koshish ki ja rahi hai...', shouldReconnect);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            
+            console.log(`Connection close ho gaya! Reconnecting: ${shouldReconnect}`);
             if (shouldReconnect) {
-                startGumnamBot();
+                setTimeout(() => startGumnamBot(), 3000);
             }
         } else if (connection === 'open') {
             console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
@@ -80,7 +75,7 @@ async function startGumnamBot() {
         const isOwner = (participant === OWNER_JID || senderJid === OWNER_JID);
         const lowerText = messageText.toLowerCase();
 
-        // 1. SECURITY FILTER: Bad Words Detection (Non-owners only)
+        // Security filters
         const badWords = ["fuck", "shit", "bitch", "asshole", "bastard", "idiot", "haram", "choot", "lund", "gandu", "madarchod", "behenchod", "bhosdike"];
         const containsAbuse = badWords.some(word => lowerText.includes(word));
 
@@ -93,7 +88,6 @@ async function startGumnamBot() {
             return;
         }
 
-        // 2. SECURITY FILTER: Link Blocking (Non-owners only)
         const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9][-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
         if (linkRegex.test(messageText) && !isOwner) {
             try { await sock.sendMessage(senderJid, { delete: m.key }); } catch (e) {}
@@ -104,7 +98,7 @@ async function startGumnamBot() {
             return;
         }
 
-        // --- 3. OWNER VIP COMMANDS LOGIC ---
+        // Owner VIP Logic
         if (isOwner) {
             let ownerReply = "";
             if (lowerText.startsWith('/song') || lowerText.startsWith('/gana')) {
@@ -125,7 +119,7 @@ async function startGumnamBot() {
             return;
         }
 
-        // --- 4. NORMAL MEMBERS COMMANDS LOGIC ---
+        // Normal Member Commands
         const isPrefixed = messageText.startsWith('/');
         const isMentioned = lowerText.includes('gumnam');
 
@@ -155,7 +149,6 @@ async function startGumnamBot() {
 
 startGumnamBot();
 
-// Render web service ke liye dummy HTTP server
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
