@@ -17,7 +17,7 @@ async function startGumnamBot() {
     });
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
         
         if (connection === 'open') {
             console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
@@ -34,10 +34,12 @@ async function startGumnamBot() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Pairing code request logic (Socket stable hone ke baad call hoga)
+    // FIX: Yeh direct socket open hone par pairing code request karega bina timeout error ke
     if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
+        setImmediate(async () => {
             try {
+                // Thora sa wait taake socket initialization mukammal ho jaye
+                await new Promise(resolve => setTimeout(resolve, 3000));
                 console.log('Pairing code mangwaya ja raha hai...');
                 const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
                 console.log(`\n========================================`);
@@ -46,7 +48,7 @@ async function startGumnamBot() {
             } catch (err) {
                 console.log('Pairing code generate karne mein error aaya:', err);
             }
-        }, 5000);
+        });
     }
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
