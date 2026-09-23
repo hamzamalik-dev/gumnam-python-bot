@@ -5,35 +5,23 @@ const fs = require('fs');
 const OWNER_JID = '923039354643@s.whatsapp.net';
 
 // Yahan apna woh number likhein jispar bot chalana hai (Country code ke sath, bina '+' ke)
-const BOT_PHONE_NUMBER = '923144816962'; // <-- Yahan apna bot wala number likhein
+const BOT_PHONE_NUMBER = '923144816962';
 
 async function startGumnamBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // QR code bilkul band
+        printQRInTerminal: false,
         browser: Browsers.macOS('Desktop'),
     });
 
-    // Pairing code request logic
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
-                console.log(`\n========================================`);
-                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
-                console.log(`========================================\n`);
-            } catch (err) {
-                console.log('Pairing code generate karne mein error aaya:', err);
-            }
-        }, 4000);
-    }
-
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         
-        if (connection === 'close') {
+        if (connection === 'open') {
+            console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
+        } else if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             
@@ -41,12 +29,25 @@ async function startGumnamBot() {
             if (shouldReconnect) {
                 setTimeout(() => startGumnamBot(), 3000);
             }
-        } else if (connection === 'open') {
-            console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    // Pairing code request logic (Socket stable hone ke baad call hoga)
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                console.log('Pairing code mangwaya ja raha hai...');
+                const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
+                console.log(`\n========================================`);
+                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
+                console.log(`========================================\n`);
+            } catch (err) {
+                console.log('Pairing code generate karne mein error aaya:', err);
+            }
+        }, 5000);
+    }
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
