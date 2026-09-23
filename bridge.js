@@ -14,12 +14,11 @@ async function startGumnamBot() {
         browser: Browsers.macOS('Desktop'),
     });
 
-    sock.ev.on('connection.update', (update) => {
+   sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        // Agar QR code aaye toh logs mein print kar dein
         if (qr) {
-            console.log('--- NAYA QR CODE GENERATE HUWA HAI ---');
+            console.log('QR CODE RECEIVED:', qr);
             qrcode.generate(qr, { small: true });
         }
 
@@ -29,9 +28,11 @@ async function startGumnamBot() {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             
-            console.log(`Connection close ho gaya! Reconnecting: ${shouldReconnect}`);
+            console.log(`Connection close ho gaya! Status: ${statusCode}, Reconnecting: ${shouldReconnect}`);
+            
+            // Loop ko roknay ke liye delay barha kar 5 seconds kar dein
             if (shouldReconnect) {
-                setTimeout(() => startGumnamBot(), 3000);
+                setTimeout(() => startGumnamBot(), 5000);
             }
         }
     });
