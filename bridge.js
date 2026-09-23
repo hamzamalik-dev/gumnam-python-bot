@@ -3,6 +3,7 @@ const qrcode = require('qrcode-terminal');
 const http = require('http');
 const fs = require('fs');
 
+// Owner ka JID format (Cleaned up)
 const OWNER_JID = '923039354643@s.whatsapp.net';
 
 async function startGumnamBot() {
@@ -10,15 +11,15 @@ async function startGumnamBot() {
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true, // QR code terminal/logs mein dikhane ke liye on kar diya hai
+        printQRInTerminal: true,
         browser: Browsers.macOS('Desktop'),
     });
 
-   sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
-            console.log('QR CODE RECEIVED:', qr);
+            console.log('--- NAYA QR CODE GENERATE HUWA HAI ---');
             qrcode.generate(qr, { small: true });
         }
 
@@ -30,7 +31,6 @@ async function startGumnamBot() {
             
             console.log(`Connection close ho gaya! Status: ${statusCode}, Reconnecting: ${shouldReconnect}`);
             
-            // Loop ko roknay ke liye delay barha kar 5 seconds kar dein
             if (shouldReconnect) {
                 setTimeout(() => startGumnamBot(), 5000);
             }
@@ -41,7 +41,7 @@ async function startGumnamBot() {
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+        if (!m.message) return;
 
         const senderJid = m.key.remoteJid;
         const participant = m.key.participant || senderJid;
@@ -63,33 +63,38 @@ async function startGumnamBot() {
 
         if (!messageText) return;
 
-        const isOwner = (participant === OWNER_JID || senderJid === OWNER_JID);
+        // Clean JID matching for Owner (fromMe check + JID comparison)
+        const cleanParticipant = participant.split('@')[0].replace(/[^0-9]/g, '');
+        const cleanOwner = OWNER_JID.split('@')[0].replace(/[^0-9]/g, '');
+        const isOwner = (m.key.fromMe || cleanParticipant === cleanOwner || senderJid.includes(cleanOwner));
+        
         const lowerText = messageText.toLowerCase();
 
-        // Security filters
+        // 1. SECURITY FILTER: Bad Words Detection (Non-owners only)
         const badWords = ["fuck", "shit", "bitch", "asshole", "bastard", "idiot", "haram", "choot", "lund", "gandu", "madarchod", "behenchod", "bhosdike"];
         const containsAbuse = badWords.some(word => lowerText.includes(word));
 
         if (containsAbuse && !isOwner) {
             try { await sock.sendMessage(senderJid, { delete: m.key }); } catch (e) {}
             await sock.sendMessage(senderJid, { 
-                text: `⚠️ *Respect Warning!*\n@${participant.split('@')[0]}, is platform par badtameezi ya abuse bilkul bardasht nahi ki jayegi. Girls ki respect aur decency sab se pehle hai!`,
+                text: `⚠️ *Respect Warning!*\n@${cleanParticipant}, is platform par badtameezi ya abuse bilkul bardasht nahi ki jayegi. Girls ki respect aur decency sab se pehle hai!`,
                 mentions: [participant]
             });
             return;
         }
 
-        const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9][-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
+        // 2. SECURITY FILTER: Link Blocking (Non-owners only)
+        const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9][-a-zA-Z0-9()@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
         if (linkRegex.test(messageText) && !isOwner) {
             try { await sock.sendMessage(senderJid, { delete: m.key }); } catch (e) {}
             await sock.sendMessage(senderJid, { 
-                text: `⚠️ *Link Warning & Deleted!*\n@${participant.split('@')[0]}, is group/community mein links share karna sakht mana hai.`,
+                text: `⚠️ *Link Warning & Deleted!*\n@${cleanParticipant}, is group/community mein links share karna sakht mana hai.`,
                 mentions: [participant]
             });
             return;
         }
 
-        // Owner VIP Logic
+        // --- 3. OWNER VIP COMMANDS LOGIC ---
         if (isOwner) {
             let ownerReply = "";
             if (lowerText.startsWith('/song') || lowerText.startsWith('/gana')) {
@@ -110,7 +115,7 @@ async function startGumnamBot() {
             return;
         }
 
-        // Normal Member Commands
+        // --- 4. NORMAL MEMBERS COMMANDS LOGIC ---
         const isPrefixed = messageText.startsWith('/');
         const isMentioned = lowerText.includes('gumnam');
 
@@ -118,15 +123,15 @@ async function startGumnamBot() {
 
         let replyText = "";
         if (lowerText.includes('/song') || lowerText.includes('/gana')) {
-            replyText = `🎵 @${participant.split('@')[0]}, yeh lijiye aapke liye song:\n\n*Ranjhna ve, ashi teri yaad vich...*\n🎶 (Gumnam Agent entertainment mode!)`;
+            replyText = `🎵 @${cleanParticipant}, yeh lijiye aapke liye song:\n\n*Ranjhna ve, ashi teri yaad vich...*\n🎶 (Gumnam Agent entertainment mode!)`;
         } else if (lowerText.includes('/rules')) {
-            replyText = `📜 *Group Rules & Regulations (@${participant.split('@')[0]}):*\n1️⃣ Girls ki respect aur decency sab se pehle hai!\n2️⃣ Koi abuse, gaali galoch ya badtameezi bilkul allowed nahi.\n3️⃣ Group mein koi links share nahi karega.`;
+            replyText = `📜 *Group Rules & Regulations (@${cleanParticipant}):*\n1️⃣ Girls ki respect aur decency sab se pehle hai!\n2️⃣ Koi abuse, gaali galoch ya badtameezi bilkul allowed nahi.\n3️⃣ Group mein koi links share nahi karega.`;
         } else if (lowerText.includes('/help')) {
-            replyText = `🤖 *Gumnam Agent Commands (@${participant.split('@')[0]}):*\n- /song : Song sunne ke liye\n- /rules : Group ke rules dekhne ke liye\n- /help : Madad ke liye`;
+            replyText = `🤖 *Gumnam Agent Commands (@${cleanParticipant}):*\n- /song : Song sunne ke liye\n- /rules : Group ke rules dekhne ke liye\n- /help : Madad ke liye`;
         } else if (lowerText.includes('hello') || lowerText.includes('salam')) {
-            replyText = `Waikum Assalam @${participant.split('@')[0]}! Main Gumnam Agent hoon, is platform ka security bot.`;
+            replyText = `Waikum Assalam @${cleanParticipant}! Main Gumnam Agent hoon, is platform ka security bot.`;
         } else if (isMentioned) {
-            replyText = `Ji @${participant.split('@')[0]}, main Gumnam Agent hoon. Yahan discipline aur sab ki izzat sab se pehle hai!`;
+            replyText = `Ji @${cleanParticipant}, main Gumnam Agent hoon. Yahan discipline aur sab ki izzat sab se pehle hai!`;
         }
 
         if (replyText) {
