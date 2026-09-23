@@ -1,10 +1,10 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const http = require('http');
 const fs = require('fs');
 
 // Owner ka JID format (Cleaned up)
 const OWNER_JID = '923039354643@s.whatsapp.net';
+const BOT_PHONE_NUMBER = '923144816962';
 
 async function startGumnamBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -14,7 +14,9 @@ async function startGumnamBot() {
         browser: Browsers.macOS('Desktop'),
     });
 
-    sock.ev.on('connection.update', (update) => {
+    let pairingRequested = false;
+
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'open') {
@@ -26,28 +28,30 @@ async function startGumnamBot() {
             console.log(`Connection close ho gaya! Status: ${statusCode}, Reconnecting: ${shouldReconnect}`);
             
             if (shouldReconnect) {
+                pairingRequested = false;
                 setTimeout(() => startGumnamBot(), 5000);
             }
+        }
+
+        // Jab socket initialize ho jaye aur unregistered ho toh pairing code mangwayein
+        if (!sock.authState.creds.registered && !pairingRequested) {
+            pairingRequested = true;
+            setTimeout(async () => {
+                try {
+                    console.log('Pairing code mangwaya ja raha hai...');
+                    const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
+                    console.log(`\n========================================`);
+                    console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
+                    console.log(`========================================\n`);
+                } catch (err) {
+                    console.log('Pairing code error:', err);
+                    pairingRequested = false;
+                }
+            }, 5000);
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
-
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                const phoneNumber = "923144816962"; 
-                console.log('Pairing code mangwaya ja raha hai...');
-                const code = await sock.requestPairingCode(phoneNumber);
-                console.log(`\n========================================`);
-                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
-                console.log(`========================================\n`);
-            } catch (err) {
-                console.log('Pairing code error:', err);
-            }
-        }, 7000);
-    }
-
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
@@ -73,7 +77,7 @@ async function startGumnamBot() {
 
         if (!messageText) return;
 
-        // Clean JID matching for Owner (fromMe check + JID comparison)
+        // Clean JID matching for Owner
         const cleanParticipant = participant.split('@')[0].replace(/[^0-9]/g, '');
         const cleanOwner = OWNER_JID.split('@')[0].replace(/[^0-9]/g, '');
         const isOwner = (m.key.fromMe || cleanParticipant === cleanOwner || senderJid.includes(cleanOwner));
