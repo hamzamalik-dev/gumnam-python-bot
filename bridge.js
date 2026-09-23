@@ -1,24 +1,28 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
 const http = require('http');
 const fs = require('fs');
 
 const OWNER_JID = '923039354643@s.whatsapp.net';
-
-// Yahan apna woh number likhein jispar bot chalana hai (Country code ke sath, bina '+' ke)
-const BOT_PHONE_NUMBER = '923144816962';
 
 async function startGumnamBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false,
+        printQRInTerminal: true, // QR code terminal/logs mein dikhane ke liye on kar diya hai
         browser: Browsers.macOS('Desktop'),
     });
 
-    sock.ev.on('connection.update', async (update) => {
+    sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
+        // Agar QR code aaye toh logs mein print kar dein
+        if (qr) {
+            console.log('--- NAYA QR CODE GENERATE HUWA HAI ---');
+            qrcode.generate(qr, { small: true });
+        }
+
         if (connection === 'open') {
             console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
         } else if (connection === 'close') {
@@ -33,23 +37,6 @@ async function startGumnamBot() {
     });
 
     sock.ev.on('creds.update', saveCreds);
-
-    // FIX: Yeh direct socket open hone par pairing code request karega bina timeout error ke
-    if (!sock.authState.creds.registered) {
-        setImmediate(async () => {
-            try {
-                // Thora sa wait taake socket initialization mukammal ho jaye
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                console.log('Pairing code mangwaya ja raha hai...');
-                const code = await sock.requestPairingCode(BOT_PHONE_NUMBER);
-                console.log(`\n========================================`);
-                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
-                console.log(`========================================\n`);
-            } catch (err) {
-                console.log('Pairing code generate karne mein error aaya:', err);
-            }
-        });
-    }
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
