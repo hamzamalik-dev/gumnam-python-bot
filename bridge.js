@@ -11,18 +11,12 @@ async function startGumnamBot() {
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
         browser: Browsers.macOS('Desktop'),
     });
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect } = update;
         
-        if (qr) {
-            console.log('--- NAYA QR CODE GENERATE HUWA HAI ---');
-            qrcode.generate(qr, { small: true });
-        }
-
         if (connection === 'open') {
             console.log('🎉 Gumnam Agent WhatsApp Security Bot kamyaabi se live ho gaya hai!');
         } else if (connection === 'close') {
@@ -38,6 +32,22 @@ async function startGumnamBot() {
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                const phoneNumber = "923144816962"; 
+                console.log('Pairing code mangwaya ja raha hai...');
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log(`\n========================================`);
+                console.log(`🚀 AAPKA PAIRING CODE YEH HAI: ${code}`);
+                console.log(`========================================\n`);
+            } catch (err) {
+                console.log('Pairing code error:', err);
+            }
+        }, 7000);
+    }
+
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
